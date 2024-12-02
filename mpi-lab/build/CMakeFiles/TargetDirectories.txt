@@ -1,0 +1,5 @@
+/home/pp24/students/SA24011102/repo/mpi-lab/build/CMakeFiles/rebuild_cache.dir
+/home/pp24/students/SA24011102/repo/mpi-lab/build/CMakeFiles/edit_cache.dir
+/home/pp24/students/SA24011102/repo/mpi-lab/build/CMakeFiles/pc.dir
+/home/pp24/students/SA24011102/repo/mpi-lab/build/CMakeFiles/pa.dir
+/home/pp24/students/SA24011102/repo/mpi-lab/build/CMakeFiles/pb.dir
