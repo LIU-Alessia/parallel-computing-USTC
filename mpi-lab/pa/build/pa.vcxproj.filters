@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="E:\gradate1stCourse\parallel\repo\mpi-lab\pa\pa.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="E:\gradate1stCourse\parallel\repo\mpi-lab\pa\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{E9E4991A-E471-3155-A873-97CBFDDE6673}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

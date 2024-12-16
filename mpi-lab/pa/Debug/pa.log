@@ -1,5 +1,0 @@
-﻿pa.obj : error LNK2019: 无法解析的外部符号 _MPI_Comm_rank@8，函数 _main 中引用了该符号
-pa.obj : error LNK2019: 无法解析的外部符号 _MPI_Init@8，函数 _main 中引用了该符号
-pa.obj : error LNK2019: 无法解析的外部符号 _MPI_Finalize@0，函数 _main 中引用了该符号
-D:\MSMPI\Lib\x64\msmpi.lib : warning LNK4272: 库计算机类型“x64”与目标计算机类型“x86”冲突
-D:\Download\mpi-lab\pa\Debug\pa.exe : fatal error LNK1120: 3 个无法解析的外部命令

@@ -1,0 +1,10 @@
+^E:\GRADATE1STCOURSE\PARALLEL\REPO\MPI-LAB\PA\BUILD\CMAKEFILES\FD23E8BDFB6A66D51A7D86ACF793C969\GENERATE.STAMP.RULE
+setlocal
+D:\CMake3.31\bin\cmake.exe -SE:/gradate1stCourse/parallel/repo/mpi-lab/pa -BE:/gradate1stCourse/parallel/repo/mpi-lab/pa/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file E:/gradate1stCourse/parallel/repo/mpi-lab/pa/build/mpiLab.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

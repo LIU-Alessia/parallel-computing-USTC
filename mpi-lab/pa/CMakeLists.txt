@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.10)
+project(mpiLab LANGUAGES CXX)
+
+find_package(MPI REQUIRED)
+if(MPI_FOUND)
+    message(STATUS "MPI found: ${MPI_CXX_COMPILER}")
+else()
+    message(FATAL_ERROR "MPI not found!")
+endif()
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -Wall")
+if(NOT_CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+add_executable(pa pa.cpp)
+target_link_libraries(pa PRIVATE MPI::MPI_CXX)
