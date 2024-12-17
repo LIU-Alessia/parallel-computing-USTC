@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include <string.h>
+#include <winsock2.h>  // 使用Windows上的等效头文件
 
 int main(int argc, char *argv[]) {
     int rank, size, node_id;
@@ -15,7 +16,8 @@ int main(int argc, char *argv[]) {
 
     // 获取节点编号，假设使用的是 SLURM 或其他支持环境变量的系统
     char hostname[256];
-    gethostname(hostname, 256);
+    DWORD hostname_len = sizeof(hostname);
+    GetComputerNameA(hostname, &hostname_len);  // 使用GetComputerNameA函数替代GetComputerName
     node_id = rank;  
 
     // 将进程按节点分组
@@ -25,13 +27,13 @@ int main(int argc, char *argv[]) {
     int node_rank, node_size;
     MPI_Comm_rank(node_comm, &node_rank);
     MPI_Comm_size(node_comm, &node_size);
-
+/*
     if (node_rank == 0) {
         // 每个节点的0号进程设置消息
         snprintf(message, sizeof(message), "Hello from node %d, root %d!", node_id, rank);
         printf("Node %d, Root Rank %d: Message = '%s'\n", node_id, rank, message);
     }
-
+*/
     // 在每个节点内的进程通过 MPI_Bcast 接收消息
     MPI_Bcast(message, sizeof(message), MPI_CHAR, root_rank, node_comm);
 
