@@ -36,6 +36,7 @@ int main() {
     MPI_Init(NULL, NULL);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+    //printf("总进程数：%d\n",size);
 
     int *send, *recv;
     //分配发送和接收缓冲区，并初始化发送缓冲区的数据。
@@ -52,12 +53,12 @@ int main() {
     MPI_Reduce(&start_time, &min_start_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
     MPI_Reduce(&end_time, &max_end_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        printf("my time cost: %f\n", max_end_time - min_start_time);
+        printf("my alltoall time: %f\n", max_end_time - min_start_time);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    //测量MPI中Alltoall函数的执行时间，并输出结果
+    //测量MPI_Alltoall函数的执行时间，并输出结果
     start_time = MPI_Wtime();
     MPI_Alltoall(send, datasize, MPI_INT, recv, datasize, MPI_INT, MPI_COMM_WORLD);
     end_time = MPI_Wtime();
@@ -66,7 +67,7 @@ int main() {
 
     if (rank == 0)
     {
-        printf("alltoall total time = %f\n", max_end_time - min_start_time);
+        printf("MPI_alltoall time: %f\n", max_end_time - min_start_time);
     }
     MPI_Finalize();
 }

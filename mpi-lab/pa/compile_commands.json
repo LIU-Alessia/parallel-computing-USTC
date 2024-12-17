@@ -1,8 +1,0 @@
-[
-{
-  "directory": "E:/gradate1stCourse/parallel/repo/mpi-lab/pa",
-  "command": "D:\\mingw64\\bin\\c++.exe  @CMakeFiles/pa.dir/includes_CXX.rsp  -o CMakeFiles\\pa.dir\\pa.cpp.obj -c E:\\gradate1stCourse\\parallel\\repo\\mpi-lab\\pa\\pa.cpp",
-  "file": "E:/gradate1stCourse/parallel/repo/mpi-lab/pa/pa.cpp",
-  "output": "CMakeFiles/pa.dir/pa.cpp.obj"
-}
-]

@@ -72,6 +72,7 @@ int main(int argc, char *argv[]) {
     MPI_Bcast(message, sizeof(message), MPI_CHAR, root_rank, node_comm);
 
 ```
+![alt text](image-2.png)
 
 ### 2 problem b
 使用 MPI_Send 和 MPI_Recv 来模拟 MPI_Alltoall。将你的实验与相关 MPI通信函数做评测和对比。
@@ -112,7 +113,6 @@ int main() {
     MPI_Init(NULL, NULL);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    printf('总进程数：',size)
 
     int *send, *recv;
     //分配发送和接收缓冲区，并初始化发送缓冲区的数据。
@@ -129,9 +129,9 @@ int main() {
     MPI_Reduce(&start_time, &min_start_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
     MPI_Reduce(&end_time, &max_end_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        printf("my time cost: %f\n", max_end_time - min_start_time);
+        printf("my alltoall time: %f\n", max_end_time - min_start_time);
     }
-
+    //同步所有进程，确保精确测量时间
     MPI_Barrier(MPI_COMM_WORLD);
 
     //测量MPI_Alltoall函数的执行时间，并输出结果
@@ -143,11 +143,19 @@ int main() {
 
     if (rank == 0)
     {
-        printf("alltoall total time = %f\n", max_end_time - min_start_time);
+        printf("MPI_alltoall total time: %f\n", max_end_time - min_start_time);
     }
     MPI_Finalize();
 }
 ```
 运行结果如下：
-![alt text](image.png)
-设置不同的进程数多次实验
+![alt text](image-3.png)
+设置不同的进程数多次实验，得到性能加速图表如下：
+
+| 进程数| 2  |4     |6     |     8|
+|---|   ---|    ---|    ---|    ---|
+|my |0.003642|0.008050|0.005132|0.007585
+|mpi|0.000179|0.000271|0.000095|0.000108
+|加速比|20.3|29.7|54.0|70.2
+
+由上表可得，用MPI在进程间进行多对多通信时，直接用MPI_Send和MPI_Recv函数虽能实现基本功能，但耗费的时间非常多，效率显著低于MPI自带的方法MPI_Alltoall。加速比为模拟Alltoall的时间除以使用MPI_Alltoall的时间，由上表，随着互相通信的进程数增加，使用MPI_Alltoall的加速比会越来越大。

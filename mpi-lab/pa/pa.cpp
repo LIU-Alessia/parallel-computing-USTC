@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
     int rank, size, node_id;
     MPI_Comm node_comm;
     int root_rank = 0;  // 假设每个节点的根进程为“0号进程”
-    char message[256];
+    char message[256]="hello";
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);

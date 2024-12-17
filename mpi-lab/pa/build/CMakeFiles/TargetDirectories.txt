@@ -1,3 +1,0 @@
-E:/gradate1stCourse/parallel/repo/mpi-lab/pa/build/CMakeFiles/pa.dir
-E:/gradate1stCourse/parallel/repo/mpi-lab/pa/build/CMakeFiles/ALL_BUILD.dir
-E:/gradate1stCourse/parallel/repo/mpi-lab/pa/build/CMakeFiles/ZERO_CHECK.dir
