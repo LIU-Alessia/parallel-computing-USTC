@@ -7,74 +7,94 @@
 ## 1 problem a
 1.1）写个将 MPI 进程按其所在节点分组的程序;（1.2）在 1.1 的基础
 上，写个广播程序，主要思想是：按节点分组后，广播的 root 进程将消息
-“发送”给各组的“0 号”，再由这些“0”号进程在其小组内执行 MPI_Bcast.
+“发送”给各组的“0 号”，再由这些“0”号进程在其小组内执行 MPI_Bcast。
 
-### （1.1）
-使用 MPI_Comm_split 来基于每个进程的节点信息创建新的通信组
+解答过程的抽象如下：
+![alt text](image-2.png)
 
+### （1.1）进程分组
+实验环境只有一个节点，在此直接使用 MPI_Comm_split 创建新的通信组。__MPI_Comm_split__ 的用法如下：
+`MPI_Comm_split(MyWorld,Color,Key,&SplitWorld)`函数调用则在通信域MyWorld的基础上产生了几个分割的子通信域。原通信域MyWorld中的进程按照不同的Color值处在不同的分割通信域中，每个进程在不同分割通信域中的进程编号则由Key值来标识
+![alt text](image-11.png)
 ```c
-#include <stdio.h>
-#include <stdlib.h>
-#include <mpi.h>
-#include <string.h>
-#include <winsock2.h>  // 使用Windows上的等效头文件
+#define GROUP_SIZE 3 // 每组的大小
 
 int main(int argc, char *argv[]) {
-    int rank, size, node_id;
-    MPI_Comm node_comm;
-    int root_rank = 0;  // 假设每个节点的根进程为“0号进程”
-    char message[256];
-
+    int rank, size;
     MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // 当前进程的 rank
+    MPI_Comm_size(MPI_COMM_WORLD, &size); // 总进程数
 
-    // 获取节点编号，假设使用的是 SLURM 或其他支持环境变量的系统
-    char hostname[256];
-    DWORD hostname_len = sizeof(hostname);
-    GetComputerNameA(hostname, &hostname_len);  // 使用GetComputerNameA函数替代GetComputerName
-    node_id = rank;  
+    // 确定有多少组
+    int num_groups = (size + GROUP_SIZE - 1) / GROUP_SIZE; // 计算组数（向上取整）
 
-    // 将进程按节点分组
-    MPI_Comm_split(MPI_COMM_WORLD, node_id, rank, &node_comm);
+    // 确定当前进程所属的组和组内的 rank
+    int group_id = rank / GROUP_SIZE;         // 当前进程所在的组号
+    int intra_group_rank = rank % GROUP_SIZE; // 当前进程在组内的 rank
 
-    // 输出每个节点中的进程信息
-    int node_rank, node_size;
-    MPI_Comm_rank(node_comm, &node_rank);
-    MPI_Comm_size(node_comm, &node_size);
+    // 创建组内通信子
+    MPI_Comm group_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, group_id, rank, &group_comm);
 
-    if (node_rank == 0) {
-        // 每个节点的0号进程设置消息
-        snprintf(message, sizeof(message), "Hello from node %d, root %d!", node_id, rank);
-        printf("Node %d, Root Rank %d: Message = '%s'\n", node_id, rank, message);
+    // 获取组内 rank 和 size
+    int group_rank, group_size;
+    MPI_Comm_rank(group_comm, &group_rank);
+    MPI_Comm_size(group_comm, &group_size);
+```
+
+### （1.2）分层广播
+
+```c
+    char message[50]; // 用于存储广播的消息
+    int global_bcast_root = 0;
+
+    // 全局 root 进程（rank 0）准备广播消息
+    if (rank == global_bcast_root) {
+        snprintf(message, sizeof(message), "Hello from rank 0!");
+        printf("Global root (rank 0) broadcasting message to group roots...\n");
+
+        // 非阻塞发送消息到每组的 root
+        for (int i = 0; i < num_groups; i++) {
+            int group_root_rank = i * GROUP_SIZE; // 每组的 root（组内 rank 0）在 MPI_COMM_WORLD 的 rank
+            if (group_root_rank < size) { // 确保组存在
+                MPI_Request request;
+                MPI_Isend(message, sizeof(message), MPI_CHAR, group_root_rank, 0, MPI_COMM_WORLD, &request);
+                MPI_Request_free(&request); // 释放请求，非阻塞发送不会阻塞全局 root
+            }
+        }
     }
 
-    MPI_Comm_free(&node_comm);
+    // 各组的 root (组内 rank 0) 接收消息
+    if (intra_group_rank == 0) {
+        MPI_Recv(message, sizeof(message), MPI_CHAR, global_bcast_root, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        printf("Group %d root (rank %d in MPI_COMM_WORLD) received message: %s\n", group_id, rank, message);
+    }
+
+    // 组内广播消息
+    MPI_Bcast(message, sizeof(message), MPI_CHAR, 0, group_comm);
+
+    // 每个进程输出接收的消息
+    printf("Rank %d (group %d, intra-group rank %d) received message: %s\n",
+           rank, group_id, intra_group_rank, message);
+
+    // 释放通信子
+    MPI_Comm_free(&group_comm);
+
     MPI_Finalize();
     return 0;
-}
-
-
 ```
 运行结果如下：
 
 ![alt text](image-1.png)
 
-### （1.2）
-在上面基础上，加入广播功能，使得每个节点的“0 号”进程将消息发送给节点内的所有进程。每个节点内的进程通过 MPI_Bcast 接收消息
+注意这里要用 __非阻塞发送 (MPI_Isend)__ ，否则会造成死锁：
+![alt text](image-13.png)
 
-```c
- if (node_rank == 0) {
-        // 每个节点的0号进程设置消息
-        snprintf(message, sizeof(message), "Hello from node %d, root %d!", node_id, rank);
-        printf("Node %d, Root Rank %d: Message = '%s'\n", node_id, rank, message);
-    }
+__原因分析：__ 全局 root 进程 (rank 0) 使用 MPI_Send 向每组的 root 发送消息，但是如果接收方（组内的 rank 0）没有准备好调用 MPI_Recv，发送方会阻塞等待，从而导致死锁。
+使用 MPI_Isend 替代阻塞的 MPI_Send，并释放请求对象 (MPI_Request_free),
+可以避免全局 root 进程等待接收方就绪的情况下发生死锁。(但是不让rank0给rank0发消息虽然不会死锁，但程序也会运行不了？：
 
-    // 在每个节点内的进程通过 MPI_Bcast 接收消息
-    MPI_Bcast(message, sizeof(message), MPI_CHAR, root_rank, node_comm);
-
-```
-![alt text](image-2.png)
+![alt text](image-12.png)
 
 ## 2 problem b
 使用 MPI_Send 和 MPI_Recv 来模拟 MPI_Alltoall。将你的实验与相关 MPI通信函数做评测和对比。
@@ -260,3 +280,6 @@ int main(int argc, char *argv[]) {
 解题说明：
 1. 由题图，二叉树求和的方法：在每一步选择一个处理器储存求和的结果，向上传递汇总到一个处理器，再由这个处理器将求和结果依次传递给剩余处理器。两个过程分别需要$logN$步，故一共$2logN$。
 2. 与碟式运算相比，除了第一步所有处理器发送数据外，不是所有处理器参与计算。处理器每次也不是和同一个处理器通信，而是接受子节点数据并发送数据给父节点处理器，因此需要分别使用MPI_Send和MPI_Recv通信。
+
+## 4 problem d
+![alt text](image-10.png)
