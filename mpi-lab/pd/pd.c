@@ -1,76 +1,84 @@
 #include <mpi.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <time.h>
 #include <math.h>
 
-// 矩阵块乘法
-void matrixMultiply(double *A, double *B, double *C, int blockSize) {
-    for (int i = 0; i < blockSize; i++) {
-        for (int j = 0; j < blockSize; j++) {
-            for (int k = 0; k < blockSize; k++) {
-                C[i * blockSize + j] += A[i * blockSize + k] * B[k * blockSize + j];
-            }
-        }
+const int n=4;      //方阵的行列数
+const int q=2;      //每行每列划分的线程数
+const int m=2;      //每个线程持有方阵的行列数
+
+void Mutply(int a[m][m],int b[m][m],int c[m][m]){  /*矩阵乘法*/
+  for (int i=0;i<m;i++){
+    for (int j=0;j<m;j++){
+      for (int k=0;k<m;k++){
+        c[i][j]=c[i][j]+a[i][k]*b[k][j];}
     }
+  }
 }
 
-int main(int argc, char **argv) {
-    int rank, size;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    printf("size:%d\n",size);
+void copy(int x[m][m],int y[m][m]){     /*矩阵复制*/
+  for (int i=0;i<m;i++){
+    for(int j=0;j<m;j++){
+      y[i][j]=x[i][j];}
+  }
+}
 
-    int sqrtP = (int)sqrt(size);  // 处理器网格维度
-    int n = 8;                   // 矩阵维度（假设可被 sqrtP 整除）
-    int blockSize = n / sqrtP;   // 子块大小
+int main(int argc, char *argv[])
+{
+int rank;
+int row,column,rowRank,columnRank;
+int a[m][m],b[m][m],c[m][m],buffer[m][m];
+double begintime,endtime;
+begintime=clock();
 
-    // 每个处理器的 A, B 和 C 子块
-    double *A_block = (double *)malloc(blockSize * blockSize * sizeof(double));
-    double *B_block = (double *)malloc(blockSize * blockSize * sizeof(double));
-    double *C_block = (double *)calloc(blockSize * blockSize, sizeof(double));
+MPI_Init(&argc, &argv);
+MPI_Status(status);
+MPI_Comm rowComm,columnComm;
+MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    // 初始化 A 和 B 子块（这里假设所有块已经分发）
-    for (int i = 0; i < blockSize * blockSize; i++) {
-        A_block[i] = rank + 1;  // 示例数据
-        B_block[i] = rank + 1;
-    }
+row=rank/q;
+column=rank%q;
 
-    // 主计算循环
-    for (int k = 0; k < sqrtP; k++) {
-        // 确定广播的 A 的块的坐标
-        int broadcastRoot = (rank / sqrtP) * sqrtP + k;
-        double *A_temp = (double *)malloc(blockSize * blockSize * sizeof(double));
+MPI_Comm_split(MPI_COMM_WORLD,row,column,&rowComm);//行子通信域，每次迭代对矩阵A块MPI_Bcast广播
 
-        // 广播 A 的块
-        if (rank == broadcastRoot) {
-            MPI_Bcast(A_block, blockSize * blockSize, MPI_DOUBLE, broadcastRoot, MPI_COMM_WORLD);
-        } else {
-            MPI_Bcast(A_temp, blockSize * blockSize, MPI_DOUBLE, broadcastRoot, MPI_COMM_WORLD);
-        }
+MPI_Comm_split(MPI_COMM_WORLD,column,row,&columnComm);//列子通信域，将矩阵B块MPI_Send发送给上一个线程，并MPI_Recv接收来自下一个线程的B块
+MPI_Barrier(MPI_COMM_WORLD);
+MPI_Comm_rank(rowComm,&rowRank);
+MPI_Comm_rank(columnComm,&columnRank);
 
-        // 矩阵乘法
-        if (rank == broadcastRoot) {
-            matrixMultiply(A_block, B_block, C_block, blockSize);
-        } else {
-            matrixMultiply(A_temp, B_block, C_block, blockSize);
-        }
+for (int i=0;i<m;i++){
+  for (int j=0;j<m;j++){
+    a[i][j]=(row*m+i)*n+column*m+j;
+    b[i][j]=(row*m+i)*n+column*m+j;
+    c[i][j]=0;
+  }
+}
 
-        // 循环移动 B 块
-        int sendTo = (rank + sqrtP) % size;
-        int recvFrom = (rank - sqrtP + size) % size;
-        MPI_Sendrecv_replace(B_block, blockSize * blockSize, MPI_DOUBLE, sendTo, 0, recvFrom, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        free(A_temp);
-    }
+for(int k=0;k<q;k++){
+  if (column==(row+k)%q){
+    copy(a,buffer);
+  }
+  MPI_Bcast(buffer,m*m,MPI_INT,(row+k)%q,rowComm);
+  Mutply(buffer,b,c);
+  copy(b,buffer);
+  MPI_Send(buffer,m*m,MPI_INT,(columnRank-1+q)%q,1,columnComm);
+  MPI_Recv(b,m*m,MPI_INT,(columnRank+1)%q,1,columnComm,&status);
+  MPI_Barrier(MPI_COMM_WORLD);
+}
+printf("Proccess:%d\n",rank);
+for(int i=0;i<m;i++){
+  for(int j=0;j<m;j++){
+    printf("%d\t",c[i][j]);
+  }
+  printf("\n");
+}
+MPI_Barrier(MPI_COMM_WORLD);
 
-    // 输出计算结果
-    if (rank == 0) {
-        printf("Computation complete.\n");
-    }
+if(rank==0){
+  endtime=clock();
+  printf("Running time:%fs\n",(endtime-begintime)/CLOCKS_PER_SEC);
+}
 
-    free(A_block);
-    free(B_block);
-    free(C_block);
-    MPI_Finalize();
-    return 0;
+MPI_Finalize();
+return 0;
 }

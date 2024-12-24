@@ -99,6 +99,13 @@ __原因分析：__ 全局 root 进程 (rank 0) 使用 MPI_Send 向每组的 roo
 ## 2 problem b
 使用 MPI_Send 和 MPI_Recv 来模拟 MPI_Alltoall。将你的实验与相关 MPI通信函数做评测和对比。
 
+### 方法一
+第一种自定义的MPI_Alltoall函数，算法抽象如下：
+
+![alt text](image-14.png)
+
+每个进程都会遍历所有进程（包括自己），如果当前进程 i 不是自己（i != rank），则使用 MPI_Send 发送数据到进程 i，并使用 MPI_Recv 从进程 i 接收数据。
+
 ```c
 //自定义alltoall函数
 void MPI_Alltoall_my(int* senddata, int sendcount, MPI_Datatype senddatatype, int* recvdata, int recvcount,
@@ -107,7 +114,7 @@ void MPI_Alltoall_my(int* senddata, int sendcount, MPI_Datatype senddatatype, in
         MPI_Status status;
         MPI_Comm_rank(comm, &rank);
         MPI_Comm_size(comm, &size);
-        //每个进程都会遍历所有进程（包括自己）
+        //每个进程都会遍历所有进程
         for (int i = 0; i < size; i++) {
             //如果当前进程 i 不是自己（i != rank），则使用 MPI_Send 发送数据到进程 i，并使用 MPI_Recv 从进程 i 接收数据。
             if (i != rank) {
@@ -171,7 +178,9 @@ int main() {
 }
 ```
 运行结果如下：
+
 ![alt text](image-3.png)
+
 设置不同的进程数多次实验，得到性能加速图表如下：
 
 | 进程数| 2  |4     |6     |     8|
@@ -181,6 +190,38 @@ int main() {
 |加速比|20.3|29.7|54.0|70.2
 
 由上表可得，用MPI在进程间进行多对多通信时，直接用MPI_Send和MPI_Recv函数虽能实现基本功能，但耗费的时间非常多，效率显著低于MPI自带的方法MPI_Alltoall。加速比为模拟Alltoall的时间除以使用MPI_Alltoall的时间，由上表，随着互相通信的进程数增加，使用MPI_Alltoall的加速比会越来越大。
+
+### 方法二
+上述基于两层循环、进程间逐个send和recv的基础实现耗费时间较多，下面对其进行并行优化。
+```c
+void tony_ladd_alltoall(int *send_data, int *recv_data, int size, int rank) {
+    int *buffer = (int *)malloc(size * sizeof(int)); // 缓存用于环形交换
+
+    for (int step = 0; step < size; step++) {
+        // 计算发送和接收的目标进程
+        int send_to = (rank + step) % size;
+        int recv_from = (rank - step + size) % size;
+
+        if (step == 0) {
+            // 第一步直接拷贝自己的数据，无需通信
+            for (int i = 0; i < size; i++) {
+                buffer[i] = send_data[i];
+            }
+        } else {
+            // 环形发送和接收
+            MPI_Sendrecv(buffer, size, MPI_INT, send_to, 0,
+                         recv_data, size, MPI_INT, recv_from, 0,
+                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            // 更新缓存为接收到的数据
+            for (int i = 0; i < size; i++) {
+                buffer[i] = recv_data[i];
+            }
+        }
+    }
+    free(buffer);
+}
+```
 
 ## 3 problem c
 N 个处理器求 N 个数的全和，要求每个处理器均保持全和。
@@ -283,3 +324,88 @@ int main(int argc, char *argv[]) {
 
 ## 4 problem d
 ![alt text](image-10.png)
+
+将矩阵进行划分以后，可以按照高等代数里的知识计算
+$$
+\begin{aligned}
+C_{ij} &= \sum_{k=0}^{q-1}A_{ik}B_{kj}\\
+&= A_{i0}B_{0j}+A_{il}B_{1j}+\ldots+A_{i,q-1}B_{q-1,j} 
+\end{aligned}
+$$
+
+但分析上述过程，会发生 __数据访问冲突__：
+如下图所示，在进行第一次的计算时，如果按行优先的计算原则，
+那么 A00 必然会 R-R 冲突，而 B 矩阵的读取不会发生冲突。同理对角线上的矩阵块都存在访问冲突，因此规避 A 子矩阵的冲突时必然要做的事情，fox算法就是用行通信子将A00广播给每一行的 C0j来解决此问题。
+
+![alt text](image-15.png)
+
+根据题述fox算法的原理，可视化计算过程如下（由于我的电脑CPU只有8线程，下以分块数量block=4为例）：
+
+![alt text](image-16.png)
+
+如上图，不同色块表示不同线程/处理器，处理器同时存储划分的子块$A_{ij}$和$B_{ij}$。相乘表示所有处理器同时计算$A_{ij}\times B_{ij}$，并存储点乘的结果$C_{ij}$。
+
+算法实现如下：
+```c
+int main(int argc, char *argv[])
+{
+int rank;
+int row,column,rowRank,columnRank;
+int a[m][m],b[m][m],c[m][m],buffer[m][m];
+double begintime,endtime;
+begintime=clock();
+
+MPI_Init(&argc, &argv);
+MPI_Status(status);
+MPI_Comm rowComm,columnComm;
+MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+row=rank/q;
+column=rank%q;
+
+MPI_Comm_split(MPI_COMM_WORLD,row,column,&rowComm);//行子通信域，每次迭代对矩阵A块MPI_Bcast广播
+
+MPI_Comm_split(MPI_COMM_WORLD,column,row,&columnComm);//列子通信域，将矩阵B块MPI_Send发送给上一个线程，并MPI_Recv接收来自下一个线程的B块
+
+MPI_Barrier(MPI_COMM_WORLD);
+MPI_Comm_rank(rowComm,&rowRank);
+MPI_Comm_rank(columnComm,&columnRank);
+
+for (int i=0;i<m;i++){
+  for (int j=0;j<m;j++){
+    a[i][j]=(row*m+i)*n+column*m+j;
+    b[i][j]=(row*m+i)*n+column*m+j;
+    c[i][j]=0;
+  }
+}
+
+for(int k=0;k<q;k++){
+  if (column==(row+k)%q){
+    copy(a,buffer);
+  }
+  MPI_Bcast(buffer,m*m,MPI_INT,(row+k)%q,rowComm);
+  Mutply(buffer,b,c);
+  copy(b,buffer);
+  MPI_Send(buffer,m*m,MPI_INT,(columnRank-1+q)%q,1,columnComm);
+  MPI_Recv(b,m*m,MPI_INT,(columnRank+1)%q,1,columnComm,&status);
+  MPI_Barrier(MPI_COMM_WORLD);
+}
+printf("Proccess:%d\n",rank);
+for(int i=0;i<m;i++){
+  for(int j=0;j<m;j++){
+    printf("%d\t",c[i][j]);
+  }
+  printf("\n");
+}
+MPI_Barrier(MPI_COMM_WORLD);
+
+```
+受江胜同学分享的启发，可以在每一行线程和每一列线程分别划分子通信域，在子通信域内进行通信，方便代码编写，提升执行效率。
+
+运行结果如下：
+
+![alt text](image-17.png)
+
+和以下串行执行的结果对比可知，计算结果正确。
+
+![alt text](image-18.png)
