@@ -22,16 +22,15 @@
 int main(int argc, char *argv[]) {
     int rank, size;
     MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // 当前进程的 rank
-    MPI_Comm_size(MPI_COMM_WORLD, &size); // 总进程数
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
+    MPI_Comm_size(MPI_COMM_WORLD, &size); 
 
     // 确定有多少组
     int num_groups = (size + GROUP_SIZE - 1) / GROUP_SIZE; // 计算组数（向上取整）
 
     // 确定当前进程所属的组和组内的 rank
-    int group_id = rank / GROUP_SIZE;         // 当前进程所在的组号
-    int intra_group_rank = rank % GROUP_SIZE; // 当前进程在组内的 rank
-
+    int group_id = rank / GROUP_SIZE;  
+    int intra_group_rank = rank % GROUP_SIZE; 
     // 创建组内通信子
     MPI_Comm group_comm;
     MPI_Comm_split(MPI_COMM_WORLD, group_id, rank, &group_comm);
@@ -77,7 +76,6 @@ int main(int argc, char *argv[]) {
     printf("Rank %d (group %d, intra-group rank %d) received message: %s\n",
            rank, group_id, intra_group_rank, message);
 
-    // 释放通信子
     MPI_Comm_free(&group_comm);
 
     MPI_Finalize();
@@ -222,6 +220,15 @@ void tony_ladd_alltoall(int *send_data, int *recv_data, int size, int rank) {
     free(buffer);
 }
 ```
+运行结果如下：
+
+![alt text](image-19.png)
+
+设置不同进程数，画出性能比较图如下：
+
+![alt text](image-20.png)
+
+由图，优化后的方法二可以显著降低全局通信alltoall的时间，比第一种方法提升了近10倍。方法二在进程数小于等于4时性能逼近MPI_Alltoall函数，当进程数较大时和MPI_Alltoall仍有较大差距。
 
 ## 3 problem c
 N 个处理器求 N 个数的全和，要求每个处理器均保持全和。
@@ -409,3 +416,62 @@ MPI_Barrier(MPI_COMM_WORLD);
 和以下串行执行的结果对比可知，计算结果正确。
 
 ![alt text](image-18.png)
+
+### 5 problem e
+根据题述用MPI实现互动过程，算法的抽象如下。我的CPU共有8个线程，设置前2个线程为参数处理器，剩下的6个为工作处理器。
+
+![alt text](image-22.png)
+
+```c
+int main( int argc, char* argv[] ){
+    int P=2;  //2个参数服务器进程
+    int Q =6; //6个工作进程
+    int rank, size;
+    int senddate=0,sum=0,allsum=0;
+    double average=0.0;
+    double collect[10];
+    int count=2;  //展示两轮互动过程
+ 
+    MPI_Init( &argc, &argv );
+    MPI_Status(status);
+    MPI_Comm_size( MPI_COMM_WORLD, &size );
+    MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+
+    MPI_Comm Pcomm,Qcomm;
+   //参数服务器组成子通信域Pcomm
+    MPI_Comm_split(MPI_COMM_WORLD,rank/P,rank%P,&Pcomm); 
+   //每个参数服务器与其对应的所有工作进程组成一个子通信域Qcomm
+    MPI_Comm_split(MPI_COMM_WORLD,rank%P,rank/P,&Qcomm);
+    //注意初始化随机数种子。time(NULL) 获取当前时间，rank 确保每个进程有不同的种子
+    srand(time(NULL) + rank);
+    for(int i=0;i<count;i++){
+    if(rank>P-1){
+         senddate=rand()%100;
+         printf("process%d random%d:  %d\n",rank,i+1,senddate);
+    }
+//参数服务器对其对应工作进程产生的随机数进行求和归约
+    MPI_Reduce(&senddate,&sum,1,MPI_INT,MPI_SUM,0,Qcomm); 
+ //参数服务器间求和归约（每个都持有全和）
+    MPI_Allreduce(&sum,&allsum,1,MPI_INT,MPI_SUM,Pcomm);
+    average=(double)allsum/Q; //注意此处求均值是除以工作进程的数量
+ //参数服务器将平均值广播给对应的工作进程
+    MPI_Bcast(&average,1,MPI_DOUBLE,0,Qcomm);
+    collect[i]=average;
+    }
+
+//结束输出平均值
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("process:%d average number:\t",rank);
+    for(int i=0;i<count;i++){
+      printf("%f\t",collect[i]);
+    }
+   printf("\n");
+    MPI_Finalize();
+    return 0;
+}
+```
+运行结果如下：
+
+![alt text](image-23.png)
+
+如图，每个进程都获得了所有工作进程的平均值，以第一轮为例，程序计算的结果为37，由average=(39 + 32 + 42 + 45 + 29 + 35 )/6=37可知计算正确。

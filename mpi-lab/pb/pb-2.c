@@ -58,12 +58,12 @@ int main(int argc, char *argv[]) {
     // 记录结束时间
     end_time = MPI_Wtime();
 
-    // 输出每个进程接收到的数据
-    printf("Rank %d received data: ", rank);
-    for (int i = 0; i < size; i++) {
-        printf("%d ", recv_data[i]);
-    }
-    printf("\n");
+    // // 输出每个进程接收到的数据
+    // printf("Rank %d received data: ", rank);
+    // for (int i = 0; i < size; i++) {
+    //     printf("%d ", recv_data[i]);
+    // }
+    // printf("\n");
 
     // 输出执行时间
     if (rank == 0) {
