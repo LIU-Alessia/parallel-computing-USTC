@@ -1,3 +1,8 @@
+*.zip
+*.pdf
+*.tar.gz
+*.html
+
 # Prerequisites
 *.d
 
