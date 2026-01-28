@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define GROUP_SIZE 3 // 每组的大小
+#define GROUP_SIZE 4 // 每组的大小
 
 int main(int argc, char *argv[]) {
     int rank, size;
@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     // 全局 root 进程（rank 0）准备广播消息
     if (rank == global_bcast_root) {
         snprintf(message, sizeof(message), "Hello from rank 0!");
-        printf("Global root (rank 0) broadcasting message to group roots...\n");
+        //printf("Global root (rank 0) broadcasting message to group roots...\n");
 
         // 非阻塞发送消息到每组的 root
         for (int i = 0; i < num_groups; i++) {
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     // 各组的 root (组内 rank 0) 接收消息
     if (intra_group_rank == 0) {
         MPI_Recv(message, sizeof(message), MPI_CHAR, global_bcast_root, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        printf("Group %d root (rank %d in MPI_COMM_WORLD) received message: %s\n", group_id, rank, message);
+        //printf("Group %d root (rank %d in MPI_COMM_WORLD) received message: %s\n", group_id, rank, message);
     }
     // 同步：确保每组的 root 都接收到消息后再进行组内广播
     MPI_Barrier(MPI_COMM_WORLD);
