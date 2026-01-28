@@ -1,7 +1,3 @@
-# <center>并行程序设计实验报告</center>
-
-### <center>刘天润SC24219058</center>
-
 # MPI-LAB
 
 ## 1 problem a
